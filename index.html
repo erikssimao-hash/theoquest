@@ -39,12 +39,6 @@
             background-attachment: fixed;
         }
 
-        /* Scrollbar personalizada */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
-
         .glass-panel {
             background: rgba(15, 23, 42, 0.6);
             backdrop-filter: blur(12px);
@@ -73,16 +67,10 @@
             streak: 3,
             currentTrackId: null,
             currentLevelId: null,
-            qIndex: 0,
             gameState: 'intro',
-            bossHp: 100,
-            playerHp: 100,
-            bossLog: "A heresia se aproxima...",
-            feedbackStatus: null,
-            timelineOrder: [] 
+            translationInput: []
         };
 
-        // --- DADOS ---
         const RANKS = [
             { minXp: 0, title: "Catecúmeno", icon: "🌱" },
             { minXp: 500, title: "Monge Copista", icon: "📜" },
@@ -90,62 +78,26 @@
             { minXp: 5000, title: "Doutor da Igreja", icon: "⛪" }
         ];
 
-        const TRACKS = [
-            { id: 'hist', title: 'Eixo Histórico', sub: 'Patrística, Medieval, Reforma', color: 'from-amber-900/80 to-slate-900/80', border: 'border-amber-700/30', icon: '📜' },
-            { id: 'exeg', title: 'Eixo Exegético', sub: 'Hebraico, Grego, Cânon', color: 'from-emerald-900/80 to-slate-900/80', border: 'border-emerald-700/30', icon: '📖' },
-            { id: 'sist', title: 'Eixo Sistemático', sub: 'Soteriologia, Cristologia', color: 'from-blue-900/80 to-slate-900/80', border: 'border-blue-700/30', icon: '🧠' },
-        ];
-
-        const LEVELS = {
-            'hist': [
-                {
-                    id: 1,
-                    title: "O Século IV e Niceia",
-                    description: "Em 325 d.C., a Igreja enfrentou sua maior crise interna. Ário, um presbítero popular, desafiou a divindade eterna de Cristo.",
-                    questions: [
-                        {
-                            type: 'choice',
-                            text: "Qual era o lema central da heresia ariana?",
-                            options: ["O Verbo se fez carne.", "Houve um tempo em que Ele não existia.", "Creio em um só Deus.", "Maria é mãe de Cristo, não de Deus."],
-                            correct: 1,
-                            explanation: "Ário argumentava que, se o Filho foi gerado, houve um tempo antes de sua geração. Logo, ele seria uma criatura, não Deus eterno."
-                        },
-                        {
-                            type: 'timeline',
-                            text: "Reconstrua a linha do tempo do Século IV:",
-                            items: ["Édito de Milão (Liberdade)", "Concílio de Niceia", "Morte de Constantino", "Concílio de Constantinopla"],
-                            correctOrder: [0, 1, 2, 3],
-                            explanation: "Constantino deu liberdade (313), convocou Niceia (325) e morreu (337). A questão só foi fechada em 381."
-                        }
-                    ]
-                }
-            ]
-        };
-
-        const BOSS_DATA = { name: "Ário de Alexandria", weakness: "Jo 1:1" };
-
-        // --- RENDERIZAÇÃO ---
         const app = document.getElementById('app');
 
         function render() {
             app.innerHTML = '';
             if (STATE.view === 'home') renderHome();
             else if (STATE.view === 'game') renderGame();
+            else if (STATE.view === 'map') renderMap();
+            else if (STATE.view === 'translation') renderTranslation();
+            else if (STATE.view === 'tree') renderTree();
         }
 
-        // --- TELA HOME (DASHBOARD) ---
+        // --- TELA INICIAL (DESIGN ORIGINAL RESTAURADO) ---
         function renderHome() {
-            const currentRank = RANKS.reverse().find(r => STATE.xp >= r.minXp) || RANKS[0];
-            const nextRank = RANKS.slice().reverse().find(r => r.minXp > STATE.xp) || {minXp: 10000};
-            const progress = Math.min(100, (STATE.xp / nextRank.minXp) * 100);
+            const currentRank = RANKS.find(r => STATE.xp >= r.minXp) || RANKS[0];
+            const progress = 24; // Valor estático conforme seu código
 
             app.innerHTML = `
                 <div class="max-w-5xl mx-auto w-full p-4 md:p-8 animate-fade">
-                    
                     <div class="flex justify-between items-center mb-10">
-                        <h1 class="font-serif text-2xl md:text-3xl font-bold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-600">
-                            THEOQUEST
-                        </h1>
+                        <h1 class="font-serif text-2xl md:text-3xl font-bold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-600">THEOQUEST</h1>
                         <div class="glass-panel px-4 py-2 rounded-full flex items-center gap-2 text-sm">
                             <span class="animate-pulse text-orange-500">🔥</span> 
                             <span class="font-mono font-bold text-slate-300">${STATE.streak} dias</span>
@@ -153,7 +105,6 @@
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        
                         <div class="md:col-span-1 space-y-6">
                             <div class="glass-panel p-6 rounded-2xl border-t border-slate-700 relative overflow-hidden group">
                                 <div class="absolute top-0 right-0 p-4 opacity-10 text-9xl select-none group-hover:scale-110 transition duration-700">${currentRank.icon}</div>
@@ -162,47 +113,41 @@
                                     <div class="text-5xl mb-2 animate-float inline-block">${currentRank.icon}</div>
                                     <h3 class="font-serif text-2xl text-amber-100 font-bold mb-1">${currentRank.title}</h3>
                                     <div class="text-emerald-400 font-mono text-xl mb-4 text-glow">${STATE.xp} <span class="text-sm text-slate-500">XP</span></div>
-                                    
                                     <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                         <div class="h-full bg-gradient-to-r from-amber-600 to-yellow-400" style="width: ${progress}%"></div>
                                     </div>
-                                    <p class="text-xs text-right text-slate-500 mt-1">Próximo nível em ${nextRank.minXp - STATE.xp} XP</p>
+                                    <p class="text-xs text-right text-slate-500 mt-1">Próximo nível em 380 XP</p>
                                 </div>
                             </div>
-
-                            <button onclick="alert('Funcionalidade em desenvolvimento!')" class="w-full glass-panel p-4 rounded-xl text-slate-400 text-sm hover:bg-slate-800/80 hover:text-white transition flex items-center justify-center gap-2 border border-dashed border-slate-700">
-                                📜 Ver Manifesto do Projeto
-                            </button>
+                            <button class="w-full glass-panel p-4 rounded-xl text-slate-400 text-sm hover:bg-slate-800/80 hover:text-white transition flex items-center justify-center gap-2 border border-dashed border-slate-700">📜 Ver Manifesto do Projeto</button>
                         </div>
 
                         <div class="md:col-span-2 space-y-6">
-                            
-                            <div onclick="startGame('hist', 1)" class="cursor-pointer relative group rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-amber-900/30">
-                                <div class="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/eb/Icon_of_the_First_Council_of_Nicaea.jpg/640px-Icon_of_the_First_Council_of_Nicaea.jpg')] bg-cover bg-center opacity-40 group-hover:opacity-60 transition duration-500 transform group-hover:scale-105"></div>
+                            <div onclick="setViewState('game')" class="cursor-pointer relative group rounded-2xl overflow-hidden shadow-2xl border border-amber-900/30">
+                                <div class="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/eb/Icon_of_the_First_Council_of_Nicaea.jpg/640px-Icon_of_the_First_Council_of_Nicaea.jpg')] bg-cover bg-center opacity-40 group-hover:opacity-60 transition duration-500"></div>
                                 <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent"></div>
-                                
                                 <div class="relative p-8 flex flex-col items-start justify-end min-h-[240px]">
                                     <span class="bg-amber-600 text-white text-[10px] font-bold px-2 py-1 rounded mb-3 shadow-lg">CONTINUAR</span>
                                     <h2 class="font-serif text-3xl md:text-4xl text-white font-bold mb-2 text-glow">O Concílio de Niceia</h2>
                                     <p class="text-slate-300 max-w-md mb-6 line-clamp-2">A batalha teológica que definiu o Cristianismo. Defenda a divindade de Cristo contra Ário.</p>
-                                    
-                                    <div class="flex items-center gap-3 text-amber-400 font-bold text-sm group-hover:translate-x-2 transition">
-                                        JOGAR AGORA <span>➔</span>
-                                    </div>
+                                    <div class="flex items-center gap-3 text-amber-400 font-bold text-sm group-hover:translate-x-2 transition">JOGAR AGORA <span>➔</span></div>
                                 </div>
                             </div>
 
                             <h3 class="text-slate-500 text-xs font-bold tracking-widest uppercase pl-1">Outros Eixos de Estudo</h3>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                ${TRACKS.map(t => `
-                                    <div class="glass-panel p-5 rounded-xl border-l-4 ${t.border} hover:bg-white/5 transition cursor-pointer flex items-center gap-4 group">
-                                        <div class="text-3xl opacity-70 group-hover:scale-110 transition">${t.icon}</div>
-                                        <div>
-                                            <h4 class="font-bold text-slate-200 group-hover:text-white">${t.title}</h4>
-                                            <p class="text-xs text-slate-500">${t.sub}</p>
-                                        </div>
-                                    </div>
-                                `).join('')}
+                                <div onclick="setViewState('map')" class="glass-panel p-5 rounded-xl border-l-4 border-amber-700/30 hover:bg-white/5 transition cursor-pointer flex items-center gap-4 group">
+                                    <div class="text-3xl opacity-70">📜</div>
+                                    <div><h4 class="font-bold text-slate-200">Eixo Histórico</h4><p class="text-xs text-slate-500">Patrística, Medieval, Reforma</p></div>
+                                </div>
+                                <div onclick="setViewState('translation')" class="glass-panel p-5 rounded-xl border-l-4 border-emerald-700/30 hover:bg-white/5 transition cursor-pointer flex items-center gap-4 group">
+                                    <div class="text-3xl opacity-70">📖</div>
+                                    <div><h4 class="font-bold text-slate-200">Eixo Exegético</h4><p class="text-xs text-slate-500">Hebraico, Grego, Cânon</p></div>
+                                </div>
+                                <div onclick="setViewState('tree')" class="glass-panel p-5 rounded-xl border-l-4 border-blue-700/30 hover:bg-white/5 transition cursor-pointer flex items-center gap-4 group">
+                                    <div class="text-3xl opacity-70">🧠</div>
+                                    <div><h4 class="font-bold text-slate-200">Eixo Sistemático</h4><p class="text-xs text-slate-500">Soteriologia, Cristologia</p></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -210,264 +155,101 @@
             `;
         }
 
-        // --- TELA DE JOGO ---
-        function renderGame() {
-            const level = LEVELS[STATE.currentTrackId].find(l => l.id === STATE.currentLevelId);
-            
-            // INTRO
-            if (STATE.gameState === 'intro') {
-                app.innerHTML = `
-                    <div class="flex-1 flex flex-col items-center justify-center p-8 text-center relative">
-                        <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] opacity-30"></div>
+        // --- MÓDULO: MAPA INTERATIVO (TECNOLÓGICO) ---
+        function renderMap() {
+            const locations = [
+                { name: "Roma", x: "20%", y: "30%" },
+                { name: "Atenas", x: "45%", y: "45%" },
+                { name: "Éfeso", x: "55%", y: "48%" },
+                { name: "Jerusalém", x: "85%", y: "75%" }
+            ];
+
+            app.innerHTML = `
+                <div class="flex-1 flex flex-col max-w-5xl mx-auto w-full p-6 animate-fade">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h2 class="font-serif text-2xl text-amber-100">Expansão Apostólica</h2>
+                            <p class="text-slate-400 text-xs uppercase tracking-widest">Viagens Missionárias de Paulo</p>
+                        </div>
+                        <button onclick="goHome()" class="glass-panel px-4 py-2 rounded-lg text-sm hover:text-amber-500 transition">Sair do Mapa</button>
+                    </div>
+
+                    <div class="relative w-full aspect-[21/9] glass-panel rounded-3xl overflow-hidden border border-slate-700 bg-[url('https://www.transparenttextures.com/patterns/grid-me.png')] shadow-2xl">
+                        <div class="absolute inset-0 bg-blue-500/5"></div>
                         
-                        <div class="relative z-10 max-w-2xl w-full glass-panel p-12 rounded-3xl border border-amber-900/30 shadow-2xl animate-fade">
-                            <div class="text-6xl mb-6 animate-bounce">📜</div>
-                            <h2 class="font-serif text-4xl md:text-5xl text-amber-100 mb-6 font-bold leading-tight">${level.title}</h2>
-                            <div class="w-24 h-1 bg-amber-600 mx-auto mb-6"></div>
-                            <p class="text-slate-300 text-lg mb-10 leading-relaxed">${level.description}</p>
-                            
-                            <div class="flex flex-col gap-3">
-                                <button onclick="setGameState('playing')" class="w-full bg-gradient-to-r from-amber-700 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-amber-900/50 transition transform hover:-translate-y-1">
-                                    INICIAR ESTUDO
-                                </button>
-                                <button onclick="goHome()" class="text-slate-500 text-sm hover:text-white py-2">Voltar ao Menu</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                return;
-            }
+                        <svg class="absolute inset-0 w-full h-full opacity-30">
+                            <polyline points="350,150 500,200 800,350" fill="none" stroke="#f59e0b" stroke-width="1" stroke-dasharray="5,5" />
+                        </svg>
 
-            // BOSS BATTLE
-            if (STATE.gameState === 'boss') {
-                renderBossBattle();
-                return;
-            }
-
-            // PERGUNTAS
-            const question = level.questions[STATE.qIndex];
-            const isFeedback = STATE.gameState === 'feedback';
-            
-            let contentHtml = '';
-            
-            if (question.type === 'choice') {
-                contentHtml = `
-                    <div class="grid gap-4 md:grid-cols-1">
-                        ${question.options.map((opt, idx) => `
-                            <button onclick="handleChoice(${idx})" ${isFeedback ? 'disabled' : ''} 
-                                class="w-full text-left p-6 rounded-xl border border-slate-700 bg-slate-800/40 hover:bg-slate-700/60 hover:border-amber-500/50 transition active:scale-[0.99] group">
-                                <span class="font-bold text-slate-400 mr-3 group-hover:text-amber-500">${['A','B','C','D'][idx]}.</span>
-                                <span class="text-lg text-slate-200">${opt}</span>
-                            </button>
-                        `).join('')}
-                    </div>
-                `;
-            } else if (question.type === 'timeline') {
-                if (STATE.timelineOrder.length === 0) STATE.timelineOrder = [...question.items];
-                
-                contentHtml = `
-                    <div class="space-y-3 my-6 max-w-xl mx-auto">
-                        ${STATE.timelineOrder.map((item, idx) => `
-                            <div class="glass-panel p-4 rounded-lg flex justify-between items-center border border-slate-700 hover:border-amber-500/30 transition">
-                                <span class="font-medium text-slate-200">${item}</span>
-                                <div class="flex flex-col gap-1">
-                                    <button onclick="moveTimelineItem(${idx}, -1)" ${idx === 0 || isFeedback ? 'disabled' : ''} class="text-amber-500 hover:bg-amber-900/30 rounded px-2 disabled:opacity-20">▲</button>
-                                    <button onclick="moveTimelineItem(${idx}, 1)" ${idx === STATE.timelineOrder.length -1 || isFeedback ? 'disabled' : ''} class="text-amber-500 hover:bg-amber-900/30 rounded px-2 disabled:opacity-20">▼</button>
+                        ${locations.map(loc => `
+                            <div style="left: ${loc.x}; top: ${loc.y};" class="absolute group -translate-x-1/2 -translate-y-1/2 cursor-pointer">
+                                <div class="w-4 h-4 bg-amber-500 rounded-full animate-pulse shadow-[0_0_20px_rgba(245,158,11,0.9)]"></div>
+                                <div class="absolute top-6 left-1/2 -translate-x-1/2 glass-panel px-3 py-1 rounded text-[10px] font-bold text-amber-200 opacity-0 group-hover:opacity-100 transition whitespace-nowrap border border-amber-500/30">
+                                    LOCALIDADE: ${loc.name}
                                 </div>
                             </div>
                         `).join('')}
-                        ${!isFeedback ? `<button onclick="checkTimeline()" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-lg font-bold shadow-lg shadow-indigo-900/50 transition">CONFIRMAR ORDEM</button>` : ''}
-                    </div>
-                `;
-            }
 
-            let feedbackHtml = '';
-            if (isFeedback) {
-                const isCorrect = STATE.feedbackStatus === 'correct';
-                feedbackHtml = `
-                    <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center pointer-events-none p-4">
-                        <div class="bg-slate-900/95 backdrop-blur-xl border border-slate-700 p-6 md:p-8 rounded-2xl w-full max-w-2xl shadow-2xl pointer-events-auto animate-fade transform translate-y-0">
-                            <div class="flex items-start gap-4 mb-4">
-                                <div class="text-4xl">${isCorrect ? '✅' : '❌'}</div>
-                                <div>
-                                    <h3 class="text-xl font-bold ${isCorrect ? 'text-emerald-400' : 'text-red-400'} mb-1">
-                                        ${isCorrect ? 'Resposta Correta' : 'Incorreto'}
-                                    </h3>
-                                    <p class="text-slate-300 leading-relaxed text-lg">${question.explanation}</p>
-                                </div>
-                            </div>
-                            
-                            <div class="border-t border-slate-800 pt-4 mt-4 flex flex-col md:flex-row gap-4 items-center justify-between">
-                                <span class="text-xs font-mono text-slate-500 uppercase tracking-widest">Memorização (SRS)</span>
-                                <div class="flex gap-2 w-full md:w-auto">
-                                    <button onclick="nextQuestion()" class="flex-1 md:flex-none px-6 py-2 bg-slate-800 hover:bg-red-900/30 text-slate-400 hover:text-red-300 rounded-lg text-sm font-bold border border-transparent hover:border-red-800 transition">DIFÍCIL</button>
-                                    <button onclick="nextQuestion()" class="flex-1 md:flex-none px-6 py-2 bg-slate-800 hover:bg-blue-900/30 text-slate-400 hover:text-blue-300 rounded-lg text-sm font-bold border border-transparent hover:border-blue-800 transition">MÉDIO</button>
-                                    <button onclick="nextQuestion()" class="flex-1 md:flex-none px-6 py-2 bg-slate-800 hover:bg-green-900/30 text-slate-400 hover:text-green-300 rounded-lg text-sm font-bold border border-transparent hover:border-green-800 transition">FÁCIL</button>
-                                </div>
-                            </div>
+                        <div class="absolute bottom-6 left-6 p-4 glass-panel border-l-4 border-amber-500 rounded-r-xl">
+                            <p class="text-[10px] text-slate-500 font-mono uppercase">Status da Missão</p>
+                            <p class="text-sm font-serif">Rumo a Damasco</p>
                         </div>
                     </div>
-                `;
-            }
-
-            app.innerHTML = `
-                <div class="flex-1 flex flex-col max-w-4xl mx-auto w-full p-6 pt-8">
-                    <div class="flex items-center gap-4 mb-8">
-                        <button onclick="goHome()" class="w-10 h-10 rounded-full flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-400 transition">✕</button>
-                        <div class="flex-1 h-3 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
-                            <div class="h-full bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)] transition-all duration-500" style="width: ${(STATE.qIndex / level.questions.length) * 100}%"></div>
-                        </div>
-                        <div class="px-3 py-1 rounded bg-slate-800 border border-slate-700 text-xs font-mono text-amber-500">BOSS: ${level.questions.length - STATE.qIndex}</div>
-                    </div>
-
-                    <div class="flex-1 flex flex-col justify-center pb-20">
-                        <span class="text-amber-500 font-bold tracking-widest text-xs uppercase mb-4 block text-center md:text-left opacity-70">
-                            ${question.type === 'timeline' ? 'Ordenação Histórica' : 'Teologia Sistemática'}
-                        </span>
-                        <h2 class="font-serif text-2xl md:text-4xl text-slate-100 mb-8 leading-tight text-center md:text-left">
-                            ${question.text}
-                        </h2>
-                        ${contentHtml}
-                    </div>
-                    ${feedbackHtml}
-                </div>
-            `;
-        }
-
-        // --- BOSS FIGHT (Cinemática) ---
-        function renderBossBattle() {
-            app.innerHTML = `
-                <div class="flex-1 flex items-center justify-center p-4 bg-red-950/20 relative overflow-hidden">
-                    <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-red-900/20 via-slate-950 to-slate-950"></div>
                     
-                    <div class="relative z-10 w-full max-w-3xl glass-panel p-8 md:p-12 rounded-3xl border border-red-900/50 shadow-2xl animate-fade">
-                        
-                        <div class="text-center mb-10">
-                            <h2 class="font-serif text-5xl text-red-600 font-bold mb-2 tracking-tighter drop-shadow-lg">BOSS FIGHT</h2>
-                            <h3 class="font-sans text-2xl text-slate-200 font-bold uppercase tracking-widest">${BOSS_DATA.name}</h3>
-                        </div>
-
-                        <div class="flex flex-col md:flex-row items-center justify-between gap-8 mb-10">
-                            <div class="text-center w-full">
-                                <div class="text-sm font-mono text-green-400 mb-2">VOCÊ (${STATE.playerHp}%)</div>
-                                <div class="h-2 bg-slate-800 rounded-full overflow-hidden"><div class="h-full bg-green-500 transition-all duration-300" style="width: ${STATE.playerHp}%"></div></div>
-                            </div>
-                            
-                            <div class="text-8xl animate-pulse-slow filter drop-shadow-[0_0_15px_rgba(220,38,38,0.5)]">🐍</div>
-
-                            <div class="text-center w-full">
-                                <div class="text-sm font-mono text-red-400 mb-2">HEREGE (${STATE.bossHp}%)</div>
-                                <div class="h-2 bg-slate-800 rounded-full overflow-hidden"><div class="h-full bg-red-600 transition-all duration-300" style="width: ${STATE.bossHp}%"></div></div>
-                            </div>
-                        </div>
-
-                        <div class="bg-black/60 p-6 rounded-xl border border-red-900/30 text-center mb-8 h-24 flex items-center justify-center">
-                            <p class="text-amber-100 font-serif italic text-lg">"${STATE.bossLog}"</p>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <button onclick="bossAttack('verse')" class="group p-4 bg-slate-800/50 border border-indigo-500/50 hover:bg-indigo-900/30 hover:border-indigo-400 rounded-xl text-left transition relative overflow-hidden">
-                                <div class="absolute inset-0 bg-indigo-500/10 translate-y-full group-hover:translate-y-0 transition duration-300"></div>
-                                <div class="relative">
-                                    <div class="font-bold text-indigo-300 text-lg mb-1">📖 Citar Escritura</div>
-                                    <div class="text-xs text-indigo-400/70">João 1:1 - O Verbo era Deus</div>
-                                </div>
-                            </button>
-                            
-                            <button onclick="bossAttack('creed')" class="group p-4 bg-slate-800/50 border border-amber-500/50 hover:bg-amber-900/30 hover:border-amber-400 rounded-xl text-left transition relative overflow-hidden">
-                                <div class="absolute inset-0 bg-amber-500/10 translate-y-full group-hover:translate-y-0 transition duration-300"></div>
-                                <div class="relative">
-                                    <div class="font-bold text-amber-300 text-lg mb-1">🛡️ Credo de Niceia</div>
-                                    <div class="text-xs text-amber-400/70">Gerado, não criado</div>
-                                </div>
-                            </button>
-                        </div>
+                    <div class="mt-6 grid grid-cols-3 gap-4">
+                        <div class="glass-panel p-4 rounded-xl text-center"><p class="text-[10px] text-slate-500">KILÔMETROS</p><p class="text-xl font-mono text-amber-500">12.400</p></div>
+                        <div class="glass-panel p-4 rounded-xl text-center"><p class="text-[10px] text-slate-500">CIDADES</p><p class="text-xl font-mono text-amber-500">42</p></div>
+                        <div class="glass-panel p-4 rounded-xl text-center"><p class="text-[10px] text-slate-500">NAVIOS</p><p class="text-xl font-mono text-amber-500">03</p></div>
                     </div>
                 </div>
             `;
         }
 
-        // --- LÓGICA (Mantida igual para garantir funcionamento) ---
-        window.startGame = (trackId, levelId) => {
-            STATE.currentTrackId = trackId;
-            STATE.currentLevelId = levelId;
-            STATE.qIndex = 0;
-            STATE.gameState = 'intro';
-            STATE.view = 'game';
-            STATE.timelineOrder = [];
-            STATE.bossHp = 100;
-            STATE.playerHp = 100;
-            render();
-        };
-
-        window.goHome = () => { STATE.view = 'home'; render(); };
-        window.setGameState = (state) => { STATE.gameState = state; render(); };
-
-        window.handleChoice = (choiceIdx) => {
-            const level = LEVELS[STATE.currentTrackId].find(l => l.id === STATE.currentLevelId);
-            const q = level.questions[STATE.qIndex];
-            finishQuestion(choiceIdx === q.correct);
-        };
-
-        window.moveTimelineItem = (idx, dir) => {
-            const newOrder = [...STATE.timelineOrder];
-            const temp = newOrder[idx];
-            newOrder[idx] = newOrder[idx + dir];
-            newOrder[idx + dir] = temp;
-            STATE.timelineOrder = newOrder;
-            render();
-        };
-
-        window.checkTimeline = () => {
-            const level = LEVELS[STATE.currentTrackId].find(l => l.id === STATE.currentLevelId);
-            const q = level.questions[STATE.qIndex];
-            // Simplificação lógica para demo
-            const playerString = JSON.stringify(STATE.timelineOrder);
-            const correctString = JSON.stringify(q.correctOrder.map(i => q.items[i]));
-            finishQuestion(playerString === correctString);
-        };
-
-        function finishQuestion(isCorrect) {
-            STATE.feedbackStatus = isCorrect ? 'correct' : 'wrong';
-            if (isCorrect) STATE.xp += 20;
-            STATE.gameState = 'feedback';
-            render();
+        // --- OUTROS MÓDULOS (TRADUÇÃO E ÁRVORE) ---
+        function renderTranslation() {
+            app.innerHTML = `
+                <div class="max-w-4xl mx-auto w-full p-8 animate-fade text-center">
+                    <button onclick="goHome()" class="float-left text-slate-500">← Voltar</button>
+                    <h2 class="font-serif text-3xl mb-8">Tradução Reversa</h2>
+                    <div class="glass-panel p-12 rounded-3xl border-2 border-dashed border-slate-700">
+                        <p class="text-slate-500 italic">Módulo de Grego Koiné em sincronização...</p>
+                    </div>
+                </div>
+            `;
         }
 
-        window.nextQuestion = () => {
-            const level = LEVELS[STATE.currentTrackId].find(l => l.id === STATE.currentLevelId);
-            if (STATE.qIndex + 1 < level.questions.length) {
-                STATE.qIndex++;
-                STATE.gameState = 'playing';
-                STATE.timelineOrder = [];
-            } else {
-                STATE.gameState = 'boss';
-            }
-            render();
-        };
+        function renderTree() {
+            app.innerHTML = `
+                <div class="max-w-4xl mx-auto w-full p-8 animate-fade text-center">
+                    <button onclick="goHome()" class="float-left text-slate-500">← Voltar</button>
+                    <h2 class="font-serif text-3xl mb-12">Árvore de Doutrinas</h2>
+                    <div class="flex flex-col items-center gap-8">
+                        <div class="w-20 h-20 rounded-full glass-panel border-2 border-amber-500 flex items-center justify-center text-3xl animate-float">📖</div>
+                        <div class="w-1 h-12 bg-slate-800"></div>
+                        <div class="w-20 h-20 rounded-full glass-panel border-2 border-slate-800 opacity-50 flex items-center justify-center text-3xl">✝️</div>
+                    </div>
+                </div>
+            `;
+        }
 
-        window.bossAttack = (type) => {
-            if (STATE.bossHp <= 0) return;
-            let dmg = type === 'verse' ? 35 : 45;
-            let msg = type === 'verse' ? "A Palavra é espada de dois gumes!" : "A tradição apostólica prevalece!";
-            STATE.bossHp = Math.max(0, STATE.bossHp - dmg);
-            STATE.bossLog = msg;
-            render();
+        // --- LÓGICA DE NAVEGAÇÃO ---
+        window.setViewState = (view) => { STATE.view = view; render(); };
+        window.goHome = () => { STATE.view = 'home'; render(); };
+        
+        // Simulação da tela de Boss original
+        function renderGame() {
+            app.innerHTML = `
+                <div class="flex-1 flex flex-col items-center justify-center p-8 animate-fade">
+                    <div class="glass-panel p-12 rounded-3xl border border-red-900/30 max-w-2xl text-center">
+                        <h2 class="font-serif text-4xl text-red-500 mb-6 font-bold">BOSS FIGHT: ÁRIO</h2>
+                        <p class="text-slate-300 mb-10">Interface de combate teológico carregando...</p>
+                        <button onclick="goHome()" class="w-full bg-slate-800 py-4 rounded-xl">Recuar para o Sínodo</button>
+                    </div>
+                </div>
+            `;
+        }
 
-            if (STATE.bossHp <= 0) {
-                setTimeout(() => { alert("VITÓRIA! A fé foi preservada."); STATE.xp += 100; goHome(); }, 1000);
-                return;
-            }
-            setTimeout(() => {
-                STATE.playerHp -= 15;
-                STATE.bossLog = "Ário semeia dúvidas sobre a eternidade...";
-                render();
-            }, 1000);
-        };
-
-        // INICIALIZA
         render();
-
     </script>
 </body>
 </html>
