@@ -10,8 +10,16 @@
             theme: {
                 extend: {
                     fontFamily: { serif: ['Cinzel', 'serif'], sans: ['Inter', 'sans-serif'] },
-                    animation: { 'float': 'float 6s ease-in-out infinite', 'pulse-slow': 'pulse 4s infinite' },
-                    keyframes: { float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } } }
+                    animation: { 
+                        'float': 'float 6s ease-in-out infinite', 
+                        'dash': 'dash 15s linear infinite',
+                        'pillar': 'pillar-move 12s ease-in-out infinite'
+                    },
+                    keyframes: { 
+                        float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } },
+                        dash: { 'to': { 'stroke-dashoffset': '-100' } },
+                        'pillar-move': { '0%': { left: '15%', top: '65%' }, '50%': { left: '45%', top: '75%' }, '100%': { left: '70%', top: '55%' } }
+                    }
                 }
             }
         }
@@ -19,11 +27,14 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Inter:wght@300;400;600&display=swap');
         body { background-color: #020617; background-image: radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%); background-attachment: fixed; }
-        .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); }
-        .text-glow { text-shadow: 0 0 20px rgba(245, 158, 11, 0.3); }
-        .animate-fade { animation: fadeIn 0.5s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        input::placeholder { color: #475569; }
+        .glass-panel { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .map-bg { background: #e2d1b3; border: 4px solid #4a3728; position: relative; overflow: hidden; }
+        .map-water { background: #3b82f633; clip-path: polygon(0 70%, 100% 30%, 100% 100%, 0 100%); position: absolute; inset: 0; }
+        .text-glow-amber { text-shadow: 0 0 15px rgba(245, 158, 11, 0.5); }
+        .pillar-light { background: radial-gradient(circle, rgba(255,200,50,0.6) 0%, transparent 70%); filter: blur(5px); }
+        input { background: rgba(0,0,0,0.3) !important; border: 1px solid rgba(255,255,255,0.1) !important; }
+        .animate-fade { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="text-slate-200 font-sans antialiased">
@@ -31,108 +42,136 @@
     <div id="app" class="min-h-screen flex flex-col relative overflow-hidden"></div>
 
     <script>
+        // --- DATA & STATE ---
         const STATE = {
-            view: 'login', // Inicializa no Login
-            isLoggedIn: false,
-            user: { name: '', xp: 1240, streak: 3 },
-            translationInput: [],
-            qIndex: 0
+            view: 'login',
+            user: { name: 'Visitante', email: '', xp: 1240, avatar: '🏛️' },
+            currentAxis: null
         };
 
-        const RANKS = [
-            { id: 1, minXp: 0, title: "Catecúmeno", desc: "Iniciante na fé e na doutrina.", icon: "🌱" },
-            { id: 2, minXp: 500, title: "Monge Copista", desc: "Dedicado à preservação dos textos.", icon: "📜" },
-            { id: 3, minXp: 1500, title: "Escolástico", desc: "Mestre da razão e da dialética.", icon: "🏛️" },
-            { id: 4, minXp: 3000, title: "Doutor da Igreja", desc: "Autoridade máxima em teologia.", icon: "⛪" }
-        ];
+        const AXIS_DATA = {
+            'biblia': {
+                title: 'Introdução à Bíblia',
+                icon: '📑',
+                color: 'border-slate-500',
+                desc: 'A Bibliologia foca na origem, inspiração e autoridade das Escrituras. Aqui você estuda como o Cânon foi formado e a fidedignidade dos manuscritos.',
+                books: ['"A Bíblia e sua História" - Miller', '"Cânon das Escrituras" - F.F. Bruce'],
+                levels: ['Manuscritologia', 'Inerrância', 'Crítica Textual']
+            },
+            'exegese': {
+                title: 'Eixo Exegético',
+                icon: '📖',
+                color: 'border-emerald-500',
+                desc: 'A arte e ciência de extrair o significado do texto original. Envolve o estudo profundo do Grego Koiné, Hebraico Bíblico e ferramentas de hermenêutica.',
+                books: ['"Hermenêutica" - Osborne', '"Léxico Grego" - BDAG'],
+                levels: ['Gramática Básica', 'Sintaxe Intermediária', 'Exegese em Epístolas']
+            },
+            'at': { title: 'Panorama do AT', icon: '🏺', color: 'border-orange-500', view: 'map-at' },
+            'nt': { title: 'Panorama do NT', icon: '✝️', color: 'border-blue-500', view: 'map-nt' },
+            'pastorado': { title: 'Prática do Pastorado', icon: '🤝', color: 'border-purple-500', desc: 'Teologia aplicada à vida da igreja. Foca em aconselhamento, ética pastoral e administração eclesiástica.', books: ['"O Pastor Aprovado" - Baxter'], levels: ['Liderança', 'Liturgia', 'Cuidado de Almas'] },
+            'historico': { title: 'Eixo Histórico', icon: '📜', color: 'border-amber-500', desc: 'A jornada da Noiva de Cristo através dos séculos. Desde os Pais da Igreja até a Reforma e os movimentos contemporâneos.', books: ['"História do Cristianismo" - González'], levels: ['Patrística', 'Escolástica', 'Reforma Protestante'] },
+            'sistematico': { title: 'Eixo Sistemático', icon: '🧠', color: 'border-blue-700', desc: 'Organização das verdades bíblicas em tópicos lógicos: Teontologia, Cristologia, Pneumatologia e Escatologia.', books: ['"Teologia Sistemática" - Wayne Grudem'], levels: ['Doutrina de Deus', 'Soteriologia', 'Escatologia'] }
+        };
 
         const app = document.getElementById('app');
 
         function render() {
             app.innerHTML = '';
-            if (!STATE.isLoggedIn) { renderLogin(); return; }
-
-            switch(STATE.view) {
-                case 'home': renderHome(); break;
-                case 'profile': renderProfile(); break;
-                case 'game': renderGame(); break;
-                case 'translation': renderTranslation(); break;
-                case 'map-at': renderMap('Antigo Testamento', getATPoints()); break;
-                case 'map-nt': renderMap('Novo Testamento', getNTPoints()); break;
-                default: renderSimpleModule(); break;
-            }
+            if (STATE.view === 'login') return renderLogin();
+            if (STATE.view === 'home') return renderHome();
+            if (STATE.view === 'axis_detail') return renderAxisDetail();
+            if (STATE.view === 'map-at') return renderMapAT();
+            if (STATE.view === 'map-nt') return renderMapNT();
+            if (STATE.view === 'profile') return renderProfile();
         }
 
-        function setView(v) { STATE.view = v; render(); }
-        function goHome() { STATE.view = 'home'; render(); }
+        // --- VIEWS ---
 
-        // --- TELA DE LOGIN ---
         function renderLogin() {
             app.innerHTML = `
                 <div class="flex-1 flex items-center justify-center p-6 animate-fade">
-                    <div class="glass-panel p-10 rounded-3xl border border-amber-900/30 w-full max-w-md text-center">
-                        <h1 class="font-serif text-4xl text-amber-500 mb-2 tracking-widest text-glow">THEOQUEST</h1>
-                        <p class="text-slate-500 text-sm mb-8 uppercase tracking-tighter">Terminal de Acesso Teológico</p>
-                        
-                        <div class="space-y-4 mb-8">
-                            <input type="text" id="username" placeholder="Nome do Estudante" class="w-full bg-slate-900/50 border border-slate-700 p-4 rounded-xl focus:border-amber-500 outline-none transition font-mono">
-                            <input type="password" placeholder="Chave de Acesso" class="w-full bg-slate-900/50 border border-slate-700 p-4 rounded-xl focus:border-amber-500 outline-none transition font-mono">
+                    <div class="glass-panel p-10 rounded-3xl w-full max-w-md shadow-2xl border border-amber-900/30">
+                        <div class="text-center mb-8">
+                            <h1 class="font-serif text-4xl text-amber-500 tracking-widest text-glow-amber">THEOQUEST</h1>
+                            <p class="text-[10px] text-slate-500 uppercase tracking-[0.3em] mt-2">Portal Acadêmico de Acesso</p>
                         </div>
-
-                        <button onclick="handleLogin()" class="w-full bg-gradient-to-r from-amber-700 to-amber-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-amber-900/40 hover:scale-[1.02] transition">INICIAR SESSÃO</button>
-                        <p class="mt-6 text-[10px] text-slate-600 uppercase tracking-widest italic">A fé busca o entendimento</p>
+                        <div class="space-y-4 mb-8">
+                            <div>
+                                <label class="text-[10px] text-slate-500 uppercase ml-2 mb-1 block">Identificação</label>
+                                <input id="login-name" type="text" placeholder="Nome Completo" class="w-full p-4 rounded-xl outline-none focus:border-amber-500 transition text-white">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-slate-500 uppercase ml-2 mb-1 block">Sincronização</label>
+                                <input id="login-email" type="email" placeholder="e-mail@exemplo.com" class="w-full p-4 rounded-xl outline-none focus:border-amber-500 transition text-white">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-slate-500 uppercase ml-2 mb-1 block">Chave de Segurança</label>
+                                <input type="password" placeholder="••••••••" class="w-full p-4 rounded-xl outline-none focus:border-amber-500 transition text-white">
+                            </div>
+                        </div>
+                        <button onclick="handleLogin()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-4 rounded-xl shadow-lg transition transform active:scale-95 uppercase tracking-widest text-sm">Validar Credenciais</button>
                     </div>
                 </div>
             `;
         }
 
         function handleLogin() {
-            const name = document.getElementById('username').value;
-            STATE.user.name = name || 'Anônimo';
-            STATE.isLoggedIn = true;
+            const name = document.getElementById('login-name').value;
+            const email = document.getElementById('login-email').value;
+            if(!name || !email) return alert("Por favor, preencha as credenciais.");
+            STATE.user.name = name;
+            STATE.user.email = email;
             STATE.view = 'home';
             render();
         }
 
-        // --- HOME COM SUBTÍTULOS RESTAURADOS ---
         function renderHome() {
-            const currentRank = [...RANKS].reverse().find(r => STATE.user.xp >= r.minXp) || RANKS[0];
-            
             app.innerHTML = `
-                <div class="max-w-6xl mx-auto w-full p-4 md:p-8 animate-fade">
-                    <div class="flex justify-between items-center mb-10">
-                        <h1 class="font-serif text-2xl md:text-3xl font-bold tracking-widest text-amber-500">THEOQUEST</h1>
-                        <div onclick="setView('profile')" class="glass-panel px-4 py-2 rounded-full flex items-center gap-3 text-sm cursor-pointer hover:border-amber-500 transition">
-                            <span class="text-amber-500 font-bold">${STATE.user.name}</span>
-                            <div class="w-8 h-8 rounded-full bg-amber-900/50 flex items-center justify-center">${currentRank.icon}</div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div class="lg:col-span-1 space-y-6">
-                            <div class="glass-panel p-6 rounded-2xl border-t border-slate-700">
-                                <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">Patente Atual</h3>
-                                <div class="text-4xl mb-2 animate-float">${currentRank.icon}</div>
-                                <h2 class="font-serif text-2xl text-amber-100 font-bold">${currentRank.title}</h2>
-                                <p class="text-xs text-slate-400 mt-1 mb-4 italic">${currentRank.desc}</p>
-                                <div class="text-emerald-400 font-mono text-xl">${STATE.user.xp} XP</div>
+                <div class="max-w-6xl mx-auto w-full p-6 md:p-10 animate-fade">
+                    <header class="flex justify-between items-center mb-12">
+                        <h1 class="font-serif text-3xl font-bold tracking-widest text-amber-500 text-glow-amber italic">THEOQUEST</h1>
+                        <div onclick="STATE.view='profile'; render();" class="glass-panel px-5 py-2 rounded-full flex items-center gap-4 cursor-pointer hover:border-amber-500 transition border-transparent border">
+                            <div class="text-right">
+                                <p class="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Estudante</p>
+                                <p class="text-xs font-bold text-amber-100">${STATE.user.name}</p>
                             </div>
-                            <div class="glass-panel p-4 rounded-xl flex items-center gap-3">
-                                <span class="text-orange-500 text-2xl">🔥</span>
-                                <div><p class="text-[10px] text-slate-500 uppercase">Ofensiva</p><p class="font-bold">${STATE.user.streak} Dias Seguidos</p></div>
+                            <div class="w-10 h-10 rounded-full bg-amber-900/40 flex items-center justify-center text-xl">${STATE.user.avatar}</div>
+                        </div>
+                    </header>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-1 space-y-6">
+                            <div class="glass-panel p-8 rounded-3xl relative overflow-hidden">
+                                <h3 class="text-[10px] text-slate-500 uppercase font-black mb-6 tracking-widest">Membro da Ordem</h3>
+                                <div class="text-6xl mb-4 animate-float">🏛️</div>
+                                <h2 class="font-serif text-2xl text-amber-100 font-bold">Escolástico</h2>
+                                <p class="text-[10px] text-emerald-500 font-mono mt-2 uppercase">XP Atual: ${STATE.user.xp} / 3000</p>
+                                <div class="w-full h-2 bg-slate-900 rounded-full mt-4 border border-white/5 overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-amber-600 to-yellow-400" style="width: 45%"></div>
+                                </div>
                             </div>
                         </div>
 
                         <div class="lg:col-span-2 space-y-6">
-                            <h3 class="text-slate-500 text-xs font-bold uppercase tracking-widest pl-1">Eixos de Estudo Disponíveis</h3>
+                            <div class="glass-panel rounded-2xl p-8 relative overflow-hidden border border-amber-900/30">
+                                <div class="absolute inset-0 bg-gradient-to-r from-slate-950 to-transparent opacity-80"></div>
+                                <div class="relative z-10">
+                                    <span class="bg-amber-600 text-[9px] font-bold px-2 py-1 rounded mb-4 inline-block">ATIVIDADE ATUAL</span>
+                                    <h2 class="font-serif text-3xl text-white font-bold mb-2">O Concílio de Niceia</h2>
+                                    <p class="text-slate-400 text-sm max-w-md">A batalha teológica que definiu o Cristianismo. Defenda a divindade de Cristo contra Ário.</p>
+                                </div>
+                            </div>
+
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                ${renderTrackCard('simple', '📑', 'Introdução à Bíblia', 'Inspiração, Inerrância e Cânon', 'border-slate-500')}
-                                ${renderTrackCard('translation', '📖', 'Eixo Exegético', 'Grego, Hebraico e Hermenêutica', 'border-emerald-500')}
-                                ${renderTrackCard('map-at', '🏺', 'Panorama do AT', 'Da Criação ao Período Intertestamentário', 'border-orange-500')}
-                                ${renderTrackCard('map-nt', '✝️', 'Panorama do NT', 'Evangelhos, Atos e Epístolas', 'border-blue-500')}
-                                ${renderTrackCard('simple', '🤝', 'Prática do Pastorado', 'Liderança e Aconselhamento', 'border-purple-500')}
-                                ${renderTrackCard('game', '📜', 'Eixo Histórico', 'Patrística, Medieval e Reforma', 'border-amber-500')}
-                                ${renderTrackCard('simple', '🧠', 'Eixo Sistemático', 'Doutrinas e Teologia Dogmática', 'border-blue-700')}
+                                ${Object.entries(AXIS_DATA).map(([key, data]) => `
+                                    <div onclick="openAxis('${key}')" class="glass-panel p-5 rounded-xl border-l-4 ${data.color} hover:bg-white/5 cursor-pointer flex items-center gap-4 transition group">
+                                        <div class="text-3xl group-hover:scale-110 transition">${data.icon}</div>
+                                        <div>
+                                            <h4 class="font-bold text-slate-100 text-sm">${data.title}</h4>
+                                            <p class="text-[9px] text-slate-500 uppercase mt-0.5 tracking-tighter">Explorar Módulo</p>
+                                        </div>
+                                    </div>
+                                `).join('')}
                             </div>
                         </div>
                     </div>
@@ -140,114 +179,161 @@
             `;
         }
 
-        function renderTrackCard(view, icon, title, sub, color) {
-            return `
-                <div onclick="setView('${view}')" class="glass-panel p-5 rounded-xl border-l-4 ${color} hover:bg-white/5 cursor-pointer flex items-center gap-4 transition group">
-                    <div class="text-3xl group-hover:scale-110 transition">${icon}</div>
-                    <div>
-                        <h4 class="font-bold text-slate-100 text-sm">${title}</h4>
-                        <p class="text-[10px] text-slate-500 uppercase mt-0.5">${sub}</p>
+        function openAxis(key) {
+            const data = AXIS_DATA[key];
+            if(data.view) {
+                STATE.view = data.view;
+            } else {
+                STATE.currentAxis = key;
+                STATE.view = 'axis_detail';
+            }
+            render();
+        }
+
+        // --- DETALHE DO EIXO (ABAS DE EXPLICAÇÃO) ---
+        function renderAxisDetail() {
+            const data = AXIS_DATA[STATE.currentAxis];
+            app.innerHTML = `
+                <div class="max-w-4xl mx-auto w-full p-8 animate-fade">
+                    <button onclick="STATE.view='home'; render();" class="text-amber-500 text-xs font-bold mb-10 tracking-widest">← VOLTAR AO TERMINAL</button>
+                    
+                    <div class="flex items-center gap-6 mb-12">
+                        <div class="text-6xl">${data.icon}</div>
+                        <div>
+                            <h2 class="font-serif text-4xl text-amber-100 font-bold">${data.title}</h2>
+                            <p class="text-emerald-500 text-[10px] font-mono uppercase tracking-[0.3em]">Códice Teológico Ativo</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="md:col-span-2 space-y-8">
+                            <div class="glass-panel p-8 rounded-3xl">
+                                <h3 class="text-amber-500 text-xs font-bold uppercase mb-4">Definição e Escopo</h3>
+                                <p class="text-slate-300 leading-relaxed italic font-serif text-lg">"${data.desc}"</p>
+                            </div>
+
+                            <div class="glass-panel p-8 rounded-3xl">
+                                <h3 class="text-amber-500 text-xs font-bold uppercase mb-6">Trilha de Conhecimento</h3>
+                                <div class="space-y-4">
+                                    ${data.levels.map((lvl, i) => `
+                                        <div class="flex items-center gap-4 p-3 bg-white/5 rounded-xl border border-white/5">
+                                            <span class="w-6 h-6 rounded-full bg-amber-600 text-[10px] flex items-center justify-center font-bold">${i+1}</span>
+                                            <span class="text-sm font-bold text-slate-200">${lvl}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-6">
+                            <div class="glass-panel p-6 rounded-2xl border-t border-amber-500/30">
+                                <h3 class="text-slate-400 text-[10px] font-bold uppercase mb-4 tracking-widest">Bibliografia Recomendada</h3>
+                                <ul class="space-y-3">
+                                    ${data.books.map(book => `
+                                        <li class="text-[11px] text-amber-100 italic flex items-start gap-2">
+                                            <span class="text-amber-500 mt-1">◈</span> ${book}
+                                        </li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                            <button onclick="alert('Iniciando jornada prática...')" class="w-full bg-amber-600 py-4 rounded-xl font-bold uppercase text-xs tracking-[0.2em] shadow-lg hover:bg-amber-500">Iniciar Estudo</button>
+                        </div>
                     </div>
                 </div>
             `;
         }
 
-        // --- TELA DE PERFIL E PATENTES ---
+        // --- MAPAS (RESTAURADOS) ---
+        function renderMapAT() {
+            app.innerHTML = `
+                <div class="max-w-5xl mx-auto w-full p-6 animate-fade">
+                    <div class="flex justify-between items-center mb-6">
+                        <button onclick="STATE.view='home'; render();" class="text-amber-500 text-xs font-bold px-4 py-2 glass-panel rounded-lg">← VOLTAR</button>
+                        <h2 class="font-serif text-xl text-amber-100 tracking-widest uppercase">Geografia da Redenção: AT</h2>
+                    </div>
+                    
+                    <div class="map-bg aspect-video rounded-3xl relative shadow-2xl">
+                        <div class="map-water"></div>
+                        <svg class="absolute inset-0 w-full h-full" viewBox="0 0 800 450">
+                            <path d="M 150 300 Q 250 280 350 320 T 550 250" fill="none" stroke="#4a3728" stroke-width="4" stroke-dasharray="10" class="animate-dash" />
+                        </svg>
+
+                        <div class="absolute w-20 h-20 -translate-x-1/2 -translate-y-1/2 animate-pillar z-30 pointer-events-none pillar-light rounded-full"></div>
+
+                        ${mapMarker(15, 65, "Egito", "Gósen", "🏛️")}
+                        ${mapMarker(45, 75, "Sinai", "Torá", "⛰️")}
+                        ${mapMarker(70, 55, "Jericó", "Promessa", "🏰")}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMapNT() {
+            app.innerHTML = `
+                <div class="max-w-5xl mx-auto w-full p-6 animate-fade">
+                    <button onclick="STATE.view='home'; render();" class="text-blue-500 text-xs font-bold mb-6">← VOLTAR</button>
+                    <div class="map-bg aspect-video rounded-3xl relative" style="background: #d4e3f5;">
+                        <div class="map-water" style="background: #2563eb33;"></div>
+                        <svg class="absolute inset-0 w-full h-full" viewBox="0 0 800 450">
+                            <path d="M 400 100 L 400 380" fill="none" stroke="#2563eb" stroke-width="3" stroke-dasharray="8" class="animate-dash" />
+                        </svg>
+
+                        ${mapMarker(50, 20, "Galileia", "Cafarnaum", "🛶")}
+                        ${mapMarker(50, 48, "Samaria", "Sicar", "🏺")}
+                        ${mapMarker(50, 85, "Jerusalém", "Monte Sião", "⛪")}
+                    </div>
+                </div>
+            `;
+        }
+
+        function mapMarker(x, y, city, sub, icon) {
+            return `
+                <div style="left: ${x}%; top: ${y}%;" class="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer z-10">
+                    <div class="bg-white p-2 rounded-lg shadow-xl border-2 border-amber-900/20 text-2xl group-hover:scale-110 transition">${icon}</div>
+                    <div class="absolute top-12 left-1/2 -translate-x-1/2 glass-panel p-2 rounded-xl border border-amber-500/20 opacity-0 group-hover:opacity-100 transition min-w-[100px] text-center">
+                        <p class="text-[10px] font-bold text-amber-500">${city}</p>
+                        <p class="text-[8px] text-white uppercase">${sub}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- PERFIL EDITÁVEL ---
         function renderProfile() {
             app.innerHTML = `
                 <div class="max-w-4xl mx-auto w-full p-8 animate-fade">
-                    <button onclick="goHome()" class="text-slate-500 mb-8 hover:text-white transition">← Voltar ao Terminal</button>
+                    <button onclick="STATE.view='home'; render();" class="text-slate-500 text-xs mb-10 hover:text-white transition uppercase tracking-widest">← Sair das Configurações</button>
                     
-                    <div class="glass-panel p-8 rounded-3xl mb-10 flex items-center gap-8 border border-amber-500/20">
-                        <div class="text-7xl">🏛️</div>
-                        <div>
-                            <h2 class="font-serif text-3xl text-amber-100">${STATE.user.name}</h2>
-                            <p class="text-emerald-500 font-mono">Nível Escolástico | ${STATE.user.xp} XP acumulado</p>
+                    <h2 class="font-serif text-3xl text-amber-100 mb-8 tracking-widest uppercase">Perfil do Estudante</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div class="glass-panel p-8 rounded-3xl text-center space-y-6">
+                            <div class="w-32 h-32 rounded-full bg-slate-800 mx-auto flex items-center justify-center text-6xl border-4 border-amber-500 shadow-2xl">${STATE.user.avatar}</div>
+                            <button class="text-[10px] text-amber-500 font-bold uppercase border border-amber-500/30 px-4 py-2 rounded-full hover:bg-amber-500/10 transition">Mudar Avatar</button>
+                        </div>
+
+                        <div class="md:col-span-2 glass-panel p-8 rounded-3xl space-y-6">
+                            <div class="grid grid-cols-1 gap-6">
+                                <div>
+                                    <label class="text-[10px] text-slate-500 uppercase ml-2 mb-1 block">Nome Publico</label>
+                                    <input value="${STATE.user.name}" class="w-full p-4 rounded-xl outline-none focus:border-amber-500 transition text-white">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-slate-500 uppercase ml-2 mb-1 block">Endereço de Sincronização (E-mail)</label>
+                                    <input value="${STATE.user.email}" class="w-full p-4 rounded-xl outline-none focus:border-amber-500 transition text-white">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-slate-500 uppercase ml-2 mb-1 block">Alterar Chave (Senha)</label>
+                                    <input type="password" placeholder="••••••••" class="w-full p-4 rounded-xl outline-none focus:border-amber-500 transition text-white">
+                                </div>
+                            </div>
+                            <div class="pt-4">
+                                <button onclick="STATE.view='home'; render();" class="bg-emerald-600 px-8 py-3 rounded-xl font-bold uppercase text-[10px] tracking-widest">Salvar Alterações</button>
+                            </div>
                         </div>
                     </div>
-
-                    <h3 class="font-serif text-xl text-slate-400 mb-6 tracking-widest uppercase">Hierarquia de Patentes</h3>
-                    <div class="space-y-4">
-                        ${RANKS.map(r => `
-                            <div class="glass-panel p-6 rounded-2xl flex items-center gap-6 ${STATE.user.xp >= r.minXp ? 'border-amber-500/40 bg-amber-500/5' : 'opacity-40 grayscale'}">
-                                <div class="text-4xl">${r.icon}</div>
-                                <div class="flex-1">
-                                    <h4 class="font-bold text-lg text-amber-100">${r.title}</h4>
-                                    <p class="text-xs text-slate-400">${r.desc}</p>
-                                </div>
-                                <div class="text-right">
-                                    <p class="text-[10px] text-slate-500 uppercase">Requisito</p>
-                                    <p class="font-mono text-amber-600">${r.minXp} XP</p>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
                 </div>
             `;
-        }
-
-        // --- MAPAS (RESTAURADOS E DETALHADOS) ---
-        function renderMap(title, points) {
-            app.innerHTML = `
-                <div class="flex-1 flex flex-col max-w-5xl mx-auto w-full p-6 animate-fade">
-                    <div class="flex justify-between items-center mb-6">
-                        <button onclick="goHome()" class="glass-panel px-4 py-2 rounded-lg text-xs font-bold text-amber-500">← SAIR</button>
-                        <h2 class="font-serif text-xl text-amber-100 tracking-widest">${title}</h2>
-                    </div>
-                    <div class="relative aspect-video glass-panel rounded-3xl overflow-hidden border border-slate-700 bg-[url('https://www.transparenttextures.com/patterns/grid-me.png')] shadow-2xl">
-                        ${points.map(p => `
-                            <div style="left: ${p.x}; top: ${p.y};" class="absolute group -translate-x-1/2 -translate-y-1/2 cursor-pointer z-10">
-                                <div class="w-4 h-4 bg-amber-500 rounded-full animate-pulse shadow-[0_0_15px_#f59e0b]"></div>
-                                <div class="absolute left-6 top-0 glass-panel p-4 rounded-xl border border-amber-500/30 opacity-0 group-hover:opacity-100 transition min-w-[220px] z-50 pointer-events-none">
-                                    <p class="text-amber-500 font-bold text-xs uppercase">${p.name}</p>
-                                    <p class="text-[11px] text-slate-200 mt-2 leading-relaxed">${p.info}</p>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        function getATPoints() {
-            return [
-                { name: "Babilônia", x: "85%", y: "40%", info: "O Cativeiro e a Torre de Babel. Centro da Mesopotâmia." },
-                { name: "Monte Sinai", x: "45%", y: "75%", info: "A entrega da Lei (Torá) a Moisés." },
-                { name: "Jerusalém", x: "55%", y: "55%", info: "A Cidade Real de Davi e Salomão." }
-            ];
-        }
-
-        function getNTPoints() {
-            return [
-                { name: "Cafarnaum", x: "60%", y: "25%", info: "Centro do ministério de Jesus na Galileia." },
-                { name: "Belém", x: "55%", y: "65%", info: "Local do nascimento do Messias." },
-                { name: "Jerusalém", x: "54%", y: "60%", info: "Crucificação e Ressurreição." }
-            ];
-        }
-
-        // --- TRADUÇÃO (MANTIDA) ---
-        function renderTranslation() {
-            const words = ["ἐν", "ἀρχῇ", "ἦν", "ὁ", "λόγος"];
-            app.innerHTML = `
-                <div class="flex-1 flex flex-col max-w-4xl mx-auto w-full p-8 animate-fade text-center">
-                    <button onclick="goHome()" class="self-start glass-panel px-4 py-2 rounded-lg text-xs font-bold text-emerald-400 mb-12">← VOLTAR</button>
-                    <h2 class="font-serif text-3xl mb-12">João 1:1 - Grego Koiné</h2>
-                    <div class="glass-panel min-h-[100px] p-6 rounded-2xl border-dashed border-2 border-slate-700 mb-8 flex flex-wrap gap-4 justify-center">
-                        ${STATE.translationInput.map(w => `<span class="bg-emerald-600 px-4 py-2 rounded-lg font-serif text-2xl">${w}</span>`).join('')}
-                    </div>
-                    <div class="flex flex-wrap justify-center gap-3">
-                        ${words.map(w => `<button onclick="STATE.translationInput.push('${w}'); render();" class="glass-panel px-5 py-2 rounded-xl border border-emerald-500/20 font-serif text-xl">${w}</button>`).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderSimpleModule() {
-            app.innerHTML = `<div class="flex-1 flex items-center justify-center animate-fade"><div class="glass-panel p-12 rounded-3xl text-center"><h2 class="font-serif text-2xl mb-4">Módulo em Desenvolvimento</h2><button onclick="goHome()" class="bg-slate-800 px-6 py-2 rounded-lg">Voltar</button></div></div>`;
-        }
-
-        function renderGame() {
-            app.innerHTML = `<div class="flex-1 flex items-center justify-center animate-fade"><div class="glass-panel p-12 rounded-3xl text-center"><h2 class="font-serif text-3xl mb-6">Desafio de Niceia</h2><p class="mb-8 text-slate-400">Defenda a fé contra as teses arianas.</p><button onclick="goHome()" class="bg-amber-600 px-8 py-3 rounded-lg font-bold">Voltar ao Menu</button></div></div>`;
         }
 
         render();
