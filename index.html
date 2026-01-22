@@ -9,145 +9,130 @@
         tailwind.config = {
             theme: {
                 extend: {
-                    fontFamily: {
-                        serif: ['Cinzel', 'serif'],
-                        sans: ['Inter', 'sans-serif'],
-                    },
-                    animation: {
-                        'float': 'float 6s ease-in-out infinite',
-                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                    },
-                    keyframes: {
-                        float: {
-                            '0%, 100%': { transform: 'translateY(0)' },
-                            '50%': { transform: 'translateY(-10px)' },
-                        }
-                    }
+                    fontFamily: { serif: ['Cinzel', 'serif'], sans: ['Inter', 'sans-serif'] },
+                    animation: { 'float': 'float 6s ease-in-out infinite', 'pulse-slow': 'pulse 4s infinite' },
+                    keyframes: { float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } } }
                 }
             }
         }
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Inter:wght@300;400;600&display=swap');
-        
-        body {
-            background-color: #020617;
-            background-image: 
-                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
-                radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
-                radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
-            background-attachment: fixed;
-        }
-
-        .glass-panel {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-        }
-
-        .text-glow {
-            text-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
-        }
-        
+        body { background-color: #020617; background-image: radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%); background-attachment: fixed; }
+        .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); }
+        .text-glow { text-shadow: 0 0 20px rgba(245, 158, 11, 0.3); }
         .animate-fade { animation: fadeIn 0.5s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        input::placeholder { color: #475569; }
     </style>
 </head>
-<body class="text-slate-200 font-sans antialiased selection:bg-amber-500/30 selection:text-amber-200">
+<body class="text-slate-200 font-sans antialiased">
 
     <div id="app" class="min-h-screen flex flex-col relative overflow-hidden"></div>
 
     <script>
-        // --- ESTADO DO JOGO ---
         const STATE = {
-            view: 'home',
-            xp: 120,
-            streak: 3,
-            currentTrackId: null,
-            currentLevelId: null,
-            gameState: 'intro',
-            translationInput: []
+            view: 'login', // Inicializa no Login
+            isLoggedIn: false,
+            user: { name: '', xp: 1240, streak: 3 },
+            translationInput: [],
+            qIndex: 0
         };
 
         const RANKS = [
-            { minXp: 0, title: "Catecúmeno", icon: "🌱" },
-            { minXp: 500, title: "Monge Copista", icon: "📜" },
-            { minXp: 1500, title: "Escolástico", icon: "🏛️" },
-            { minXp: 5000, title: "Doutor da Igreja", icon: "⛪" }
+            { id: 1, minXp: 0, title: "Catecúmeno", desc: "Iniciante na fé e na doutrina.", icon: "🌱" },
+            { id: 2, minXp: 500, title: "Monge Copista", desc: "Dedicado à preservação dos textos.", icon: "📜" },
+            { id: 3, minXp: 1500, title: "Escolástico", desc: "Mestre da razão e da dialética.", icon: "🏛️" },
+            { id: 4, minXp: 3000, title: "Doutor da Igreja", desc: "Autoridade máxima em teologia.", icon: "⛪" }
         ];
 
         const app = document.getElementById('app');
 
         function render() {
             app.innerHTML = '';
-            if (STATE.view === 'home') renderHome();
-            else if (STATE.view === 'game') renderGame();
-            else if (STATE.view === 'map') renderMap();
-            else if (STATE.view === 'translation') renderTranslation();
-            else if (STATE.view === 'tree') renderTree();
+            if (!STATE.isLoggedIn) { renderLogin(); return; }
+
+            switch(STATE.view) {
+                case 'home': renderHome(); break;
+                case 'profile': renderProfile(); break;
+                case 'game': renderGame(); break;
+                case 'translation': renderTranslation(); break;
+                case 'map-at': renderMap('Antigo Testamento', getATPoints()); break;
+                case 'map-nt': renderMap('Novo Testamento', getNTPoints()); break;
+                default: renderSimpleModule(); break;
+            }
         }
 
-        // --- TELA INICIAL (DESIGN ORIGINAL RESTAURADO) ---
-        function renderHome() {
-            const currentRank = RANKS.find(r => STATE.xp >= r.minXp) || RANKS[0];
-            const progress = 24; // Valor estático conforme seu código
+        function setView(v) { STATE.view = v; render(); }
+        function goHome() { STATE.view = 'home'; render(); }
 
+        // --- TELA DE LOGIN ---
+        function renderLogin() {
             app.innerHTML = `
-                <div class="max-w-5xl mx-auto w-full p-4 md:p-8 animate-fade">
+                <div class="flex-1 flex items-center justify-center p-6 animate-fade">
+                    <div class="glass-panel p-10 rounded-3xl border border-amber-900/30 w-full max-w-md text-center">
+                        <h1 class="font-serif text-4xl text-amber-500 mb-2 tracking-widest text-glow">THEOQUEST</h1>
+                        <p class="text-slate-500 text-sm mb-8 uppercase tracking-tighter">Terminal de Acesso Teológico</p>
+                        
+                        <div class="space-y-4 mb-8">
+                            <input type="text" id="username" placeholder="Nome do Estudante" class="w-full bg-slate-900/50 border border-slate-700 p-4 rounded-xl focus:border-amber-500 outline-none transition font-mono">
+                            <input type="password" placeholder="Chave de Acesso" class="w-full bg-slate-900/50 border border-slate-700 p-4 rounded-xl focus:border-amber-500 outline-none transition font-mono">
+                        </div>
+
+                        <button onclick="handleLogin()" class="w-full bg-gradient-to-r from-amber-700 to-amber-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-amber-900/40 hover:scale-[1.02] transition">INICIAR SESSÃO</button>
+                        <p class="mt-6 text-[10px] text-slate-600 uppercase tracking-widest italic">A fé busca o entendimento</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleLogin() {
+            const name = document.getElementById('username').value;
+            STATE.user.name = name || 'Anônimo';
+            STATE.isLoggedIn = true;
+            STATE.view = 'home';
+            render();
+        }
+
+        // --- HOME COM SUBTÍTULOS RESTAURADOS ---
+        function renderHome() {
+            const currentRank = [...RANKS].reverse().find(r => STATE.user.xp >= r.minXp) || RANKS[0];
+            
+            app.innerHTML = `
+                <div class="max-w-6xl mx-auto w-full p-4 md:p-8 animate-fade">
                     <div class="flex justify-between items-center mb-10">
-                        <h1 class="font-serif text-2xl md:text-3xl font-bold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-600">THEOQUEST</h1>
-                        <div class="glass-panel px-4 py-2 rounded-full flex items-center gap-2 text-sm">
-                            <span class="animate-pulse text-orange-500">🔥</span> 
-                            <span class="font-mono font-bold text-slate-300">${STATE.streak} dias</span>
+                        <h1 class="font-serif text-2xl md:text-3xl font-bold tracking-widest text-amber-500">THEOQUEST</h1>
+                        <div onclick="setView('profile')" class="glass-panel px-4 py-2 rounded-full flex items-center gap-3 text-sm cursor-pointer hover:border-amber-500 transition">
+                            <span class="text-amber-500 font-bold">${STATE.user.name}</span>
+                            <div class="w-8 h-8 rounded-full bg-amber-900/50 flex items-center justify-center">${currentRank.icon}</div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div class="md:col-span-1 space-y-6">
-                            <div class="glass-panel p-6 rounded-2xl border-t border-slate-700 relative overflow-hidden group">
-                                <div class="absolute top-0 right-0 p-4 opacity-10 text-9xl select-none group-hover:scale-110 transition duration-700">${currentRank.icon}</div>
-                                <div class="relative z-10">
-                                    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Sua Jornada</h2>
-                                    <div class="text-5xl mb-2 animate-float inline-block">${currentRank.icon}</div>
-                                    <h3 class="font-serif text-2xl text-amber-100 font-bold mb-1">${currentRank.title}</h3>
-                                    <div class="text-emerald-400 font-mono text-xl mb-4 text-glow">${STATE.xp} <span class="text-sm text-slate-500">XP</span></div>
-                                    <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                        <div class="h-full bg-gradient-to-r from-amber-600 to-yellow-400" style="width: ${progress}%"></div>
-                                    </div>
-                                    <p class="text-xs text-right text-slate-500 mt-1">Próximo nível em 380 XP</p>
-                                </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-1 space-y-6">
+                            <div class="glass-panel p-6 rounded-2xl border-t border-slate-700">
+                                <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">Patente Atual</h3>
+                                <div class="text-4xl mb-2 animate-float">${currentRank.icon}</div>
+                                <h2 class="font-serif text-2xl text-amber-100 font-bold">${currentRank.title}</h2>
+                                <p class="text-xs text-slate-400 mt-1 mb-4 italic">${currentRank.desc}</p>
+                                <div class="text-emerald-400 font-mono text-xl">${STATE.user.xp} XP</div>
                             </div>
-                            <button class="w-full glass-panel p-4 rounded-xl text-slate-400 text-sm hover:bg-slate-800/80 hover:text-white transition flex items-center justify-center gap-2 border border-dashed border-slate-700">📜 Ver Manifesto do Projeto</button>
+                            <div class="glass-panel p-4 rounded-xl flex items-center gap-3">
+                                <span class="text-orange-500 text-2xl">🔥</span>
+                                <div><p class="text-[10px] text-slate-500 uppercase">Ofensiva</p><p class="font-bold">${STATE.user.streak} Dias Seguidos</p></div>
+                            </div>
                         </div>
 
-                        <div class="md:col-span-2 space-y-6">
-                            <div onclick="setViewState('game')" class="cursor-pointer relative group rounded-2xl overflow-hidden shadow-2xl border border-amber-900/30">
-                                <div class="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/eb/Icon_of_the_First_Council_of_Nicaea.jpg/640px-Icon_of_the_First_Council_of_Nicaea.jpg')] bg-cover bg-center opacity-40 group-hover:opacity-60 transition duration-500"></div>
-                                <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent"></div>
-                                <div class="relative p-8 flex flex-col items-start justify-end min-h-[240px]">
-                                    <span class="bg-amber-600 text-white text-[10px] font-bold px-2 py-1 rounded mb-3 shadow-lg">CONTINUAR</span>
-                                    <h2 class="font-serif text-3xl md:text-4xl text-white font-bold mb-2 text-glow">O Concílio de Niceia</h2>
-                                    <p class="text-slate-300 max-w-md mb-6 line-clamp-2">A batalha teológica que definiu o Cristianismo. Defenda a divindade de Cristo contra Ário.</p>
-                                    <div class="flex items-center gap-3 text-amber-400 font-bold text-sm group-hover:translate-x-2 transition">JOGAR AGORA <span>➔</span></div>
-                                </div>
-                            </div>
-
-                            <h3 class="text-slate-500 text-xs font-bold tracking-widest uppercase pl-1">Outros Eixos de Estudo</h3>
+                        <div class="lg:col-span-2 space-y-6">
+                            <h3 class="text-slate-500 text-xs font-bold uppercase tracking-widest pl-1">Eixos de Estudo Disponíveis</h3>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div onclick="setViewState('map')" class="glass-panel p-5 rounded-xl border-l-4 border-amber-700/30 hover:bg-white/5 transition cursor-pointer flex items-center gap-4 group">
-                                    <div class="text-3xl opacity-70">📜</div>
-                                    <div><h4 class="font-bold text-slate-200">Eixo Histórico</h4><p class="text-xs text-slate-500">Patrística, Medieval, Reforma</p></div>
-                                </div>
-                                <div onclick="setViewState('translation')" class="glass-panel p-5 rounded-xl border-l-4 border-emerald-700/30 hover:bg-white/5 transition cursor-pointer flex items-center gap-4 group">
-                                    <div class="text-3xl opacity-70">📖</div>
-                                    <div><h4 class="font-bold text-slate-200">Eixo Exegético</h4><p class="text-xs text-slate-500">Hebraico, Grego, Cânon</p></div>
-                                </div>
-                                <div onclick="setViewState('tree')" class="glass-panel p-5 rounded-xl border-l-4 border-blue-700/30 hover:bg-white/5 transition cursor-pointer flex items-center gap-4 group">
-                                    <div class="text-3xl opacity-70">🧠</div>
-                                    <div><h4 class="font-bold text-slate-200">Eixo Sistemático</h4><p class="text-xs text-slate-500">Soteriologia, Cristologia</p></div>
-                                </div>
+                                ${renderTrackCard('simple', '📑', 'Introdução à Bíblia', 'Inspiração, Inerrância e Cânon', 'border-slate-500')}
+                                ${renderTrackCard('translation', '📖', 'Eixo Exegético', 'Grego, Hebraico e Hermenêutica', 'border-emerald-500')}
+                                ${renderTrackCard('map-at', '🏺', 'Panorama do AT', 'Da Criação ao Período Intertestamentário', 'border-orange-500')}
+                                ${renderTrackCard('map-nt', '✝️', 'Panorama do NT', 'Evangelhos, Atos e Epístolas', 'border-blue-500')}
+                                ${renderTrackCard('simple', '🤝', 'Prática do Pastorado', 'Liderança e Aconselhamento', 'border-purple-500')}
+                                ${renderTrackCard('game', '📜', 'Eixo Histórico', 'Patrística, Medieval e Reforma', 'border-amber-500')}
+                                ${renderTrackCard('simple', '🧠', 'Eixo Sistemático', 'Doutrinas e Teologia Dogmática', 'border-blue-700')}
                             </div>
                         </div>
                     </div>
@@ -155,98 +140,114 @@
             `;
         }
 
-        // --- MÓDULO: MAPA INTERATIVO (TECNOLÓGICO) ---
-        function renderMap() {
-            const locations = [
-                { name: "Roma", x: "20%", y: "30%" },
-                { name: "Atenas", x: "45%", y: "45%" },
-                { name: "Éfeso", x: "55%", y: "48%" },
-                { name: "Jerusalém", x: "85%", y: "75%" }
-            ];
+        function renderTrackCard(view, icon, title, sub, color) {
+            return `
+                <div onclick="setView('${view}')" class="glass-panel p-5 rounded-xl border-l-4 ${color} hover:bg-white/5 cursor-pointer flex items-center gap-4 transition group">
+                    <div class="text-3xl group-hover:scale-110 transition">${icon}</div>
+                    <div>
+                        <h4 class="font-bold text-slate-100 text-sm">${title}</h4>
+                        <p class="text-[10px] text-slate-500 uppercase mt-0.5">${sub}</p>
+                    </div>
+                </div>
+            `;
+        }
 
+        // --- TELA DE PERFIL E PATENTES ---
+        function renderProfile() {
             app.innerHTML = `
-                <div class="flex-1 flex flex-col max-w-5xl mx-auto w-full p-6 animate-fade">
-                    <div class="flex justify-between items-center mb-6">
+                <div class="max-w-4xl mx-auto w-full p-8 animate-fade">
+                    <button onclick="goHome()" class="text-slate-500 mb-8 hover:text-white transition">← Voltar ao Terminal</button>
+                    
+                    <div class="glass-panel p-8 rounded-3xl mb-10 flex items-center gap-8 border border-amber-500/20">
+                        <div class="text-7xl">🏛️</div>
                         <div>
-                            <h2 class="font-serif text-2xl text-amber-100">Expansão Apostólica</h2>
-                            <p class="text-slate-400 text-xs uppercase tracking-widest">Viagens Missionárias de Paulo</p>
+                            <h2 class="font-serif text-3xl text-amber-100">${STATE.user.name}</h2>
+                            <p class="text-emerald-500 font-mono">Nível Escolástico | ${STATE.user.xp} XP acumulado</p>
                         </div>
-                        <button onclick="goHome()" class="glass-panel px-4 py-2 rounded-lg text-sm hover:text-amber-500 transition">Sair do Mapa</button>
                     </div>
 
-                    <div class="relative w-full aspect-[21/9] glass-panel rounded-3xl overflow-hidden border border-slate-700 bg-[url('https://www.transparenttextures.com/patterns/grid-me.png')] shadow-2xl">
-                        <div class="absolute inset-0 bg-blue-500/5"></div>
-                        
-                        <svg class="absolute inset-0 w-full h-full opacity-30">
-                            <polyline points="350,150 500,200 800,350" fill="none" stroke="#f59e0b" stroke-width="1" stroke-dasharray="5,5" />
-                        </svg>
-
-                        ${locations.map(loc => `
-                            <div style="left: ${loc.x}; top: ${loc.y};" class="absolute group -translate-x-1/2 -translate-y-1/2 cursor-pointer">
-                                <div class="w-4 h-4 bg-amber-500 rounded-full animate-pulse shadow-[0_0_20px_rgba(245,158,11,0.9)]"></div>
-                                <div class="absolute top-6 left-1/2 -translate-x-1/2 glass-panel px-3 py-1 rounded text-[10px] font-bold text-amber-200 opacity-0 group-hover:opacity-100 transition whitespace-nowrap border border-amber-500/30">
-                                    LOCALIDADE: ${loc.name}
+                    <h3 class="font-serif text-xl text-slate-400 mb-6 tracking-widest uppercase">Hierarquia de Patentes</h3>
+                    <div class="space-y-4">
+                        ${RANKS.map(r => `
+                            <div class="glass-panel p-6 rounded-2xl flex items-center gap-6 ${STATE.user.xp >= r.minXp ? 'border-amber-500/40 bg-amber-500/5' : 'opacity-40 grayscale'}">
+                                <div class="text-4xl">${r.icon}</div>
+                                <div class="flex-1">
+                                    <h4 class="font-bold text-lg text-amber-100">${r.title}</h4>
+                                    <p class="text-xs text-slate-400">${r.desc}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[10px] text-slate-500 uppercase">Requisito</p>
+                                    <p class="font-mono text-amber-600">${r.minXp} XP</p>
                                 </div>
                             </div>
                         `).join('')}
-
-                        <div class="absolute bottom-6 left-6 p-4 glass-panel border-l-4 border-amber-500 rounded-r-xl">
-                            <p class="text-[10px] text-slate-500 font-mono uppercase">Status da Missão</p>
-                            <p class="text-sm font-serif">Rumo a Damasco</p>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-6 grid grid-cols-3 gap-4">
-                        <div class="glass-panel p-4 rounded-xl text-center"><p class="text-[10px] text-slate-500">KILÔMETROS</p><p class="text-xl font-mono text-amber-500">12.400</p></div>
-                        <div class="glass-panel p-4 rounded-xl text-center"><p class="text-[10px] text-slate-500">CIDADES</p><p class="text-xl font-mono text-amber-500">42</p></div>
-                        <div class="glass-panel p-4 rounded-xl text-center"><p class="text-[10px] text-slate-500">NAVIOS</p><p class="text-xl font-mono text-amber-500">03</p></div>
                     </div>
                 </div>
             `;
         }
 
-        // --- OUTROS MÓDULOS (TRADUÇÃO E ÁRVORE) ---
+        // --- MAPAS (RESTAURADOS E DETALHADOS) ---
+        function renderMap(title, points) {
+            app.innerHTML = `
+                <div class="flex-1 flex flex-col max-w-5xl mx-auto w-full p-6 animate-fade">
+                    <div class="flex justify-between items-center mb-6">
+                        <button onclick="goHome()" class="glass-panel px-4 py-2 rounded-lg text-xs font-bold text-amber-500">← SAIR</button>
+                        <h2 class="font-serif text-xl text-amber-100 tracking-widest">${title}</h2>
+                    </div>
+                    <div class="relative aspect-video glass-panel rounded-3xl overflow-hidden border border-slate-700 bg-[url('https://www.transparenttextures.com/patterns/grid-me.png')] shadow-2xl">
+                        ${points.map(p => `
+                            <div style="left: ${p.x}; top: ${p.y};" class="absolute group -translate-x-1/2 -translate-y-1/2 cursor-pointer z-10">
+                                <div class="w-4 h-4 bg-amber-500 rounded-full animate-pulse shadow-[0_0_15px_#f59e0b]"></div>
+                                <div class="absolute left-6 top-0 glass-panel p-4 rounded-xl border border-amber-500/30 opacity-0 group-hover:opacity-100 transition min-w-[220px] z-50 pointer-events-none">
+                                    <p class="text-amber-500 font-bold text-xs uppercase">${p.name}</p>
+                                    <p class="text-[11px] text-slate-200 mt-2 leading-relaxed">${p.info}</p>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function getATPoints() {
+            return [
+                { name: "Babilônia", x: "85%", y: "40%", info: "O Cativeiro e a Torre de Babel. Centro da Mesopotâmia." },
+                { name: "Monte Sinai", x: "45%", y: "75%", info: "A entrega da Lei (Torá) a Moisés." },
+                { name: "Jerusalém", x: "55%", y: "55%", info: "A Cidade Real de Davi e Salomão." }
+            ];
+        }
+
+        function getNTPoints() {
+            return [
+                { name: "Cafarnaum", x: "60%", y: "25%", info: "Centro do ministério de Jesus na Galileia." },
+                { name: "Belém", x: "55%", y: "65%", info: "Local do nascimento do Messias." },
+                { name: "Jerusalém", x: "54%", y: "60%", info: "Crucificação e Ressurreição." }
+            ];
+        }
+
+        // --- TRADUÇÃO (MANTIDA) ---
         function renderTranslation() {
+            const words = ["ἐν", "ἀρχῇ", "ἦν", "ὁ", "λόγος"];
             app.innerHTML = `
-                <div class="max-w-4xl mx-auto w-full p-8 animate-fade text-center">
-                    <button onclick="goHome()" class="float-left text-slate-500">← Voltar</button>
-                    <h2 class="font-serif text-3xl mb-8">Tradução Reversa</h2>
-                    <div class="glass-panel p-12 rounded-3xl border-2 border-dashed border-slate-700">
-                        <p class="text-slate-500 italic">Módulo de Grego Koiné em sincronização...</p>
+                <div class="flex-1 flex flex-col max-w-4xl mx-auto w-full p-8 animate-fade text-center">
+                    <button onclick="goHome()" class="self-start glass-panel px-4 py-2 rounded-lg text-xs font-bold text-emerald-400 mb-12">← VOLTAR</button>
+                    <h2 class="font-serif text-3xl mb-12">João 1:1 - Grego Koiné</h2>
+                    <div class="glass-panel min-h-[100px] p-6 rounded-2xl border-dashed border-2 border-slate-700 mb-8 flex flex-wrap gap-4 justify-center">
+                        ${STATE.translationInput.map(w => `<span class="bg-emerald-600 px-4 py-2 rounded-lg font-serif text-2xl">${w}</span>`).join('')}
+                    </div>
+                    <div class="flex flex-wrap justify-center gap-3">
+                        ${words.map(w => `<button onclick="STATE.translationInput.push('${w}'); render();" class="glass-panel px-5 py-2 rounded-xl border border-emerald-500/20 font-serif text-xl">${w}</button>`).join('')}
                     </div>
                 </div>
             `;
         }
 
-        function renderTree() {
-            app.innerHTML = `
-                <div class="max-w-4xl mx-auto w-full p-8 animate-fade text-center">
-                    <button onclick="goHome()" class="float-left text-slate-500">← Voltar</button>
-                    <h2 class="font-serif text-3xl mb-12">Árvore de Doutrinas</h2>
-                    <div class="flex flex-col items-center gap-8">
-                        <div class="w-20 h-20 rounded-full glass-panel border-2 border-amber-500 flex items-center justify-center text-3xl animate-float">📖</div>
-                        <div class="w-1 h-12 bg-slate-800"></div>
-                        <div class="w-20 h-20 rounded-full glass-panel border-2 border-slate-800 opacity-50 flex items-center justify-center text-3xl">✝️</div>
-                    </div>
-                </div>
-            `;
+        function renderSimpleModule() {
+            app.innerHTML = `<div class="flex-1 flex items-center justify-center animate-fade"><div class="glass-panel p-12 rounded-3xl text-center"><h2 class="font-serif text-2xl mb-4">Módulo em Desenvolvimento</h2><button onclick="goHome()" class="bg-slate-800 px-6 py-2 rounded-lg">Voltar</button></div></div>`;
         }
 
-        // --- LÓGICA DE NAVEGAÇÃO ---
-        window.setViewState = (view) => { STATE.view = view; render(); };
-        window.goHome = () => { STATE.view = 'home'; render(); };
-        
-        // Simulação da tela de Boss original
         function renderGame() {
-            app.innerHTML = `
-                <div class="flex-1 flex flex-col items-center justify-center p-8 animate-fade">
-                    <div class="glass-panel p-12 rounded-3xl border border-red-900/30 max-w-2xl text-center">
-                        <h2 class="font-serif text-4xl text-red-500 mb-6 font-bold">BOSS FIGHT: ÁRIO</h2>
-                        <p class="text-slate-300 mb-10">Interface de combate teológico carregando...</p>
-                        <button onclick="goHome()" class="w-full bg-slate-800 py-4 rounded-xl">Recuar para o Sínodo</button>
-                    </div>
-                </div>
-            `;
+            app.innerHTML = `<div class="flex-1 flex items-center justify-center animate-fade"><div class="glass-panel p-12 rounded-3xl text-center"><h2 class="font-serif text-3xl mb-6">Desafio de Niceia</h2><p class="mb-8 text-slate-400">Defenda a fé contra as teses arianas.</p><button onclick="goHome()" class="bg-amber-600 px-8 py-3 rounded-lg font-bold">Voltar ao Menu</button></div></div>`;
         }
 
         render();
